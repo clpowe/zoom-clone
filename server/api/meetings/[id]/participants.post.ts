@@ -1,6 +1,32 @@
+import { z } from "zod";
+
+const createParticipantBodySchema = z.object({
+  name: z.string().trim().min(1).default("Guest"),
+});
+
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig();
+  const config = getRealtimeKitConfig();
   const meetingId = getRouterParam(event, "id");
+
+  if (!meetingId) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Missing meeting ID",
+    });
+  }
+
+  const body = await readBody(event);
+  const result = createParticipantBodySchema.safeParse(body);
+
+  if (!result.success) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid request body",
+      data: result.error.flatten(),
+    });
+  }
+
+  const { name } = result.data;
 
   const participantId = crypto.randomUUID();
 
@@ -13,19 +39,19 @@ export default defineEventHandler(async (event) => {
         Authorization: `Bearer ${config.cloudflareApiToken}`,
       },
       body: JSON.stringify({
-        name: "Christopher",
+        name,
         preset_name: config.realtimekitPresetName,
         custom_participant_id: participantId,
       }),
     },
   );
 
-  const data = await response.json();
+  const data = await readCloudflareJsonResponse(response);
 
   if (!response.ok) {
     throw createError({
-      status: response.status,
-      statusText: "Failed to create participant",
+      statusCode: response.status,
+      statusMessage: "Failed to create participant",
       data,
     });
   }

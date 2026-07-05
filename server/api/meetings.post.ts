@@ -1,5 +1,5 @@
-export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig();
+export default defineEventHandler(async () => {
+  const config = getRealtimeKitConfig();
 
   const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/realtime/kit/${config.realtimekitAppId}/meetings`,
@@ -10,12 +10,12 @@ export default defineEventHandler(async (event) => {
         Authorization: `Bearer ${config.cloudflareApiToken}`,
       },
       body: JSON.stringify({
-        title: "My First Cloudflare RealtimeKit Meeting",
+        title: "Just The Guys",
       }),
     },
   );
 
-  const data = await response.json();
+  const data = await readCloudflareJsonResponse(response);
 
   if (!response.ok) {
     throw createError({
