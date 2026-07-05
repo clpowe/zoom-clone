@@ -6,14 +6,16 @@ const createParticipantBodySchema = z.object({
 
 export default defineEventHandler(async (event) => {
   const config = getRealtimeKitConfig();
-  const meetingId = getRouterParam(event, "id");
+  const roomId = getRouterParam(event, "id");
 
-  if (!meetingId) {
+  if (!roomId) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Missing meeting ID",
+      statusMessage: "Missing room ID",
     });
   }
+
+  const room = getRoomByIdOrThrow(roomId);
 
   const body = await readBody(event);
   const result = createParticipantBodySchema.safeParse(body);
@@ -31,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const participantId = crypto.randomUUID();
 
   const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/realtime/kit/${config.realtimekitAppId}/meetings/${meetingId}/participants`,
+    `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/realtime/kit/${config.realtimekitAppId}/meetings/${room.cloudflareMeetingId}/participants`,
     {
       method: "POST",
       headers: {
