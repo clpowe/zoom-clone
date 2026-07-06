@@ -1,36 +1,5 @@
 <script setup lang="ts">
-type CreateMeetingResponse = {
-  data: {
-    id: string;
-  };
-};
-
-const creating = ref(false);
-const errorMessage = ref("");
-
-async function createMeeting() {
-  if (creating.value) {
-    return;
-  }
-
-  errorMessage.value = "";
-  creating.value = true;
-
-  try {
-    const response = await $fetch<CreateMeetingResponse>("/api/meetings", {
-      method: "POST",
-    });
-
-    const meetingId = response.data.id;
-
-    await navigateTo(`/room/${meetingId}`);
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = "Could not create a meeting. Please try again.";
-  } finally {
-    creating.value = false;
-  }
-}
+const { title, trimmedTitle, creating, errorMessage, createRoom } = useCreateRoom();
 </script>
 
 <template>
