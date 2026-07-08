@@ -15,6 +15,16 @@ type RealtimeKitMeetingElement = HTMLElement & {
 
 const route = useRoute();
 
+const roomId = computed(() => String(route.params.id ?? ""));
+const {
+  roomTitle,
+  loading: roomLoading,
+  errorMessage: roomErrorMessage,
+  loadRoom,
+} = useRoomDetails(roomId.value);
+
+await loadRoom();
+
 const meetingEl = ref<RealtimeKitMeetingElement | null>(null);
 const name = ref("");
 const joining = ref(false);
@@ -22,7 +32,6 @@ const joined = ref(false);
 const errorMessage = ref("");
 
 const trimmedName = computed(() => name.value.trim());
-const meetingId = computed(() => String(route.params.id ?? ""));
 
 async function joinMeeting() {
   if (joining.value || !trimmedName.value) {
@@ -35,7 +44,7 @@ async function joinMeeting() {
   // Create Participant
   try {
     const response = await $fetch<CreateParticipantResponse>(
-      `/api/meetings/${encodeURIComponent(meetingId.value)}/participants`,
+      `/api/meetings/${encodeURIComponent(roomId.value)}/participants`,
       {
         method: "POST",
         body: { name: trimmedName.value },
@@ -78,8 +87,12 @@ async function joinMeeting() {
 <template>
   <main v-if="!joined" class="lobby">
     <section class="lobby-card">
-      <h1>Join Meeting</h1>
-      <p>Enter your name before joining the call.</p>
+      <h1>Join {{ roomTitle }}</h1>
+      <p v-if="roomLoading">Loading room...</p>
+      <p v-else-if="roomErrorMessage" class="error-message">
+        {{ roomErrorMessage }}
+      </p>
+      <p v-else>Enter your name before joining the call.</p>
 
       <label>
         Name
@@ -88,7 +101,10 @@ async function joinMeeting() {
       <p v-if="errorMessage" class="error-message">
         {{ errorMessage }}
       </p>
-      <button :disabled="joining || !trimmedName" @click="joinMeeting">
+      <button
+        :disabled="joining || roomLoading || !!roomErrorMessage || !trimmedName"
+        @click="joinMeeting"
+      >
         {{ joining ? "Joining..." : "Join Meeting" }}
       </button>
     </section>
