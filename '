@@ -72,8 +72,8 @@ describe("createRoomAndNavigate", () => {
 
 describe("canSubmitCreateRoom", () => {
   it("allows submission only when the title is filled and a room is not already being created", () => {
-    expect(canSubmitCreateRoom({ title: "Team Standup", creating: false })).toBe(true);
-    expect(canSubmitCreateRoom({ title: "   ", creating: false })).toBe(false);
-    expect(canSubmitCreateRoom({ title: "Team Standup", creating: true })).toBe(false);
+    expect(canSubmitCreateRoom({ title: "Team Standup", isCreatingRoom: false })).toBe(true);
+    expect(canSubmitCreateRoom({ title: "   ", isCreatingRoom: false })).toBe(false);
+    expect(canSubmitCreateRoom({ title: "Team Standup", isCreatingRoom: true })).toBe(false);
   });
 });

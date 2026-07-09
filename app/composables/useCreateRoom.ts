@@ -19,6 +19,15 @@ type CreateRoomAndNavigateInput = {
   navigateToRoom: (roomId: string) => Promise<void>;
 };
 
+type CanSubmitCreateRoomInput = {
+  title: string;
+  creating: boolean;
+};
+
+export function canSubmitCreateRoom(input: CanSubmitCreateRoomInput) {
+  return input.title.trim().length > 0 && !input.creating;
+}
+
 export async function createRoomAndNavigate(input: CreateRoomAndNavigateInput) {
   const title = input.title.trim();
 
@@ -37,6 +46,12 @@ export function useCreateRoom() {
   const errorMessage = ref("");
 
   const trimmedTitle = computed(() => title.value.trim());
+  const canSubmit = computed(() =>
+    canSubmitCreateRoom({
+      title: title.value,
+      creating: creating.value,
+    }),
+  );
 
   async function createRoom() {
     if (creating.value) {
@@ -51,6 +66,7 @@ export function useCreateRoom() {
         title: title.value,
         createRoom: ({ title }) => {
           const roomsEndpoint = "/api/rooms";
+
           return $fetch<CreateRoomResponse>(roomsEndpoint, {
             method: "POST",
             body: { title },
@@ -69,6 +85,7 @@ export function useCreateRoom() {
   return {
     title,
     trimmedTitle,
+    canSubmit,
     creating,
     errorMessage,
     createRoom,
