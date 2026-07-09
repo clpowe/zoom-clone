@@ -5,7 +5,7 @@ const { title, trimmedTitle, creating, errorMessage, createRoom } = useCreateRoo
 <template>
   <main class="home">
     <section class="start-panel">
-      <button class="start-button" :disabled="creating" @click="createMeeting">
+      <button class="start-button" :disabled="creating" @click="createRoom">
         {{ creating ? "Creating meeting..." : "Start meeting" }}
       </button>
       <p v-if="errorMessage" class="error-message">

@@ -13,6 +13,11 @@ type RealtimeKitMeetingElement = HTMLElement & {
   meeting?: RealtimeKitMeeting;
 };
 
+type RealtimeKitStatesUpdateEvent = CustomEvent<{
+  meeting?: string;
+  roomLeftState?: string;
+}>;
+
 const route = useRoute();
 
 const roomId = computed(() => String(route.params.id ?? ""));
@@ -23,25 +28,52 @@ const {
   loadRoom,
 } = useRoomDetails(roomId.value);
 
+const {
+  inviteUrl,
+  copied: inviteCopied,
+  errorMessage: inviteErrorMessage,
+  copyInviteLink,
+} = useRoomInvite(roomId.value);
+
+const { isLobby, isInCall, hasLeft, markJoined, markLeft, prepareRejoin } = useCallLifecycle();
+
 await loadRoom();
 
 const meetingEl = ref<RealtimeKitMeetingElement | null>(null);
+const activeMeeting = ref<RealtimeKitMeeting | null>(null);
 const name = ref("");
 const joining = ref(false);
-const joined = ref(false);
 const errorMessage = ref("");
 
 const trimmedName = computed(() => name.value.trim());
 
+function detachMeetingEvents() {
+  meetingEl.value?.removeEventListener(
+    "rtkStatesUpdate",
+    handleRealtimeKitStatesUpdate as EventListener,
+  );
+}
+
+function handleRealtimeKitStatesUpdate(event: Event) {
+  const { detail } = event as RealtimeKitStatesUpdateEvent;
+
+  if (!isRealtimeKitEndedState(detail ?? {})) {
+    return;
+  }
+
+  detachMeetingEvents();
+  activeMeeting.value = null;
+  markLeft();
+}
+
 async function joinMeeting() {
-  if (joining.value || !trimmedName.value) {
+  if (joining.value || roomLoading.value || roomErrorMessage.value || !trimmedName.value) {
     return;
   }
 
   joining.value = true;
   errorMessage.value = "";
 
-  // Create Participant
   try {
     const response = await $fetch<CreateParticipantResponse>(
       `/api/meetings/${encodeURIComponent(roomId.value)}/participants`,
@@ -60,20 +92,25 @@ async function joinMeeting() {
 
     defineCustomElements();
 
-    // Initialize SDK
     const meeting = await RealtimeKitClient.init({
       authToken: token,
     });
 
-    joined.value = true;
+    activeMeeting.value = meeting;
+    markJoined();
 
     await nextTick();
-    // Attach meeting instance to web component
+
     if (!meetingEl.value) {
       throw new Error("RealtimeKit meeting element is not mounted");
     }
 
     meetingEl.value.meeting = meeting;
+    meetingEl.value.addEventListener(
+      "rtkStatesUpdate",
+      handleRealtimeKitStatesUpdate as EventListener,
+    );
+
     await meeting.join();
   } catch (error) {
     console.error(error);
@@ -82,25 +119,57 @@ async function joinMeeting() {
     joining.value = false;
   }
 }
+
+function rejoinRoom() {
+  detachMeetingEvents();
+  activeMeeting.value = null;
+  meetingEl.value = null;
+  errorMessage.value = "";
+  prepareRejoin();
+}
+
+async function returnHome() {
+  await navigateTo("/");
+}
+
+onBeforeUnmount(() => {
+  detachMeetingEvents();
+});
 </script>
 
 <template>
-  <main v-if="!joined" class="lobby">
+  <main v-if="isLobby" class="lobby">
     <section class="lobby-card">
       <h1>Join {{ roomTitle }}</h1>
+
       <p v-if="roomLoading">Loading room...</p>
       <p v-else-if="roomErrorMessage" class="error-message">
         {{ roomErrorMessage }}
       </p>
       <p v-else>Enter your name before joining the call.</p>
 
+      <ClientOnly>
+        <div v-if="inviteUrl" class="invite-row">
+          <input :value="inviteUrl" readonly aria-label="Invite link" />
+          <button type="button" @click="copyInviteLink">
+            {{ inviteCopied ? "Copied" : "Copy link" }}
+          </button>
+        </div>
+      </ClientOnly>
+
+      <p v-if="inviteErrorMessage" class="error-message">
+        {{ inviteErrorMessage }}
+      </p>
+
       <label>
         Name
         <input v-model="name" type="text" placeholder="Your name" />
       </label>
+
       <p v-if="errorMessage" class="error-message">
         {{ errorMessage }}
       </p>
+
       <button
         :disabled="joining || roomLoading || !!roomErrorMessage || !trimmedName"
         @click="joinMeeting"
@@ -109,10 +178,26 @@ async function joinMeeting() {
       </button>
     </section>
   </main>
-  <ClientOnly v-else>
-    <rtk-meeting ref="meetingEl" show-setup-screen="true" class="h-screen w-screen" />
+
+  <main v-else-if="hasLeft" class="lobby">
+    <section class="lobby-card">
+      <h1>You left {{ roomTitle }}</h1>
+      <p>The room is still available if you want to join again.</p>
+
+      <div class="action-row">
+        <button type="button" @click="rejoinRoom">Rejoin</button>
+        <button type="button" class="secondary-button" @click="returnHome">Home</button>
+      </div>
+    </section>
+  </main>
+
+  <ClientOnly v-else-if="isInCall">
+    <main class="meeting-shell">
+      <rtk-meeting ref="meetingEl" show-setup-screen="true" class="meeting" />
+    </main>
   </ClientOnly>
 </template>
+
 <style scoped>
 .lobby {
   min-height: 100vh;
@@ -173,10 +258,43 @@ async function joinMeeting() {
   cursor: not-allowed;
 }
 
+.invite-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.invite-row input {
+  min-width: 0;
+  color: #d4d4d4;
+  font-size: 0.9rem;
+}
+
+.invite-row button {
+  background: #262626;
+  padding: 0.75rem 1rem;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.secondary-button {
+  background: #262626 !important;
+}
+
+.meeting-shell {
+  min-height: 100vh;
+  background: #0a0a0a;
+}
+
 .meeting {
   height: 100vh;
   width: 100vw;
 }
+
 .lobby-card .error-message {
   margin: 0;
   color: #fca5a5;
