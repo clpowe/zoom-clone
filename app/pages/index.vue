@@ -1,42 +1,75 @@
 <script setup lang="ts">
 const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = useCreateRoom();
+
+const {
+  rooms,
+  hasRooms,
+  loading: roomsLoading,
+  errorMessage: roomsErrorMessage,
+  refreshRooms,
+} = useRooms();
 </script>
 
 <template>
   <main class="home">
-    <section class="create-room-panel">
-      <div class="heading">
-        <p class="eyebrow">Video rooms</p>
-        <h1>Create a room</h1>
-        <p>Start a simple video call and share the room link.</p>
-      </div>
+    <div class="home-layout">
+      <section class="create-room-panel">
+        <div class="heading">
+          <p class="eyebrow">Video rooms</p>
+          <h1>Create a room</h1>
+          <p>Start a simple video call and share the room link.</p>
+        </div>
 
-      <form class="create-room-form" @submit.prevent="createRoom">
-        <label>
-          Room title
-          <input
-            v-model="title"
-            type="text"
-            name="title"
-            placeholder="Team Standup"
-            autocomplete="off"
-            :disabled="creating"
-          />
-        </label>
+        <form class="create-room-form" @submit.prevent="createRoom">
+          <label>
+            Room title
+            <input
+              v-model="title"
+              type="text"
+              name="title"
+              placeholder="Team Standup"
+              autocomplete="off"
+              :disabled="creating"
+            />
+          </label>
 
-        <button type="submit" :disabled="!canSubmit">
-          {{ creating ? "Creating room..." : "Create room" }}
-        </button>
-      </form>
+          <button type="submit" :disabled="!canSubmit">
+            {{ creating ? "Creating room..." : "Create room" }}
+          </button>
+        </form>
 
-      <p v-if="trimmedTitle" class="room-preview">
-        Room will be named <strong>{{ trimmedTitle }}</strong>
-      </p>
+        <p v-if="trimmedTitle" class="room-preview">
+          Room will be named <strong>{{ trimmedTitle }}</strong>
+        </p>
 
-      <p v-if="errorMessage" class="error-message">
-        {{ errorMessage }}
-      </p>
-    </section>
+        <p v-if="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </p>
+      </section>
+      <section class="recent-rooms-panel">
+        <div class="heading compact">
+          <p class="eyebrow">Recent</p>
+          <h2>Rooms</h2>
+        </div>
+
+        <p v-if="roomsLoading" class="muted-message">Loading rooms...</p>
+        <p v-else-if="roomsErrorMessage" class="error-message">
+          {{ roomsErrorMessage }}
+        </p>
+        <p v-else-if="!hasRooms" class="muted-message">No rooms yet. Create one to get started.</p>
+
+        <ul v-else class="room-list">
+          <li v-for="room in rooms" :key="room.id" class="room-item">
+            <div>
+              <h3>{{ room.title }}</h3>
+              <p>{{ new Date(room.createdAt).toLocaleString() }}</p>
+            </div>
+
+            <NuxtLink :to="`/room/${room.id}`">Join</NuxtLink>
+          </li>
+        </ul>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -50,8 +83,16 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   padding: 1rem;
 }
 
-.create-room-panel {
-  width: min(100%, 440px);
+.home-layout {
+  width: min(100%, 960px);
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.create-room-panel,
+.recent-rooms-panel {
   display: grid;
   gap: 1.25rem;
   background: #171717;
@@ -65,6 +106,10 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   gap: 0.5rem;
 }
 
+.heading.compact {
+  gap: 0.35rem;
+}
+
 .eyebrow {
   margin: 0;
   color: #93c5fd;
@@ -73,9 +118,17 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   text-transform: uppercase;
 }
 
-.heading h1 {
+.heading h1,
+.heading h2 {
   margin: 0;
+}
+
+.heading h1 {
   font-size: 2rem;
+}
+
+.heading h2 {
+  font-size: 1.4rem;
 }
 
 .heading p {
@@ -107,7 +160,8 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   opacity: 0.7;
 }
 
-.create-room-form button {
+.create-room-form button,
+.room-item a {
   border: none;
   border-radius: 10px;
   background: #2563eb;
@@ -115,9 +169,12 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   padding: 0.85rem 1rem;
   font-weight: 700;
   cursor: pointer;
+  text-align: center;
+  text-decoration: none;
 }
 
-.create-room-form button:hover:not(:disabled) {
+.create-room-form button:hover:not(:disabled),
+.room-item a:hover {
   background: #1d4ed8;
 }
 
@@ -126,7 +183,8 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   cursor: not-allowed;
 }
 
-.room-preview {
+.room-preview,
+.muted-message {
   margin: 0;
   color: #a3a3a3;
   font-size: 0.9rem;
@@ -136,9 +194,62 @@ const { title, trimmedTitle, canSubmit, creating, errorMessage, createRoom } = u
   color: white;
 }
 
+.room-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  background: #0f0f0f;
+  padding: 1rem;
+}
+
+.room-item h3,
+.room-item p {
+  margin: 0;
+}
+
+.room-item h3 {
+  font-size: 1rem;
+}
+
+.room-item p {
+  margin-top: 0.25rem;
+  color: #a3a3a3;
+  font-size: 0.85rem;
+}
+
 .error-message {
   margin: 0;
   color: #fca5a5;
   font-size: 0.9rem;
+}
+
+@media (max-width: 760px) {
+  .home {
+    place-items: start center;
+  }
+
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .create-room-panel,
+  .recent-rooms-panel {
+    padding: 1.25rem;
+  }
+
+  .room-item {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
