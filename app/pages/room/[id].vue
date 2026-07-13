@@ -35,17 +35,31 @@ const {
   copyInviteLink,
 } = useRoomInvite(roomId.value);
 
-const { isLobby, isInCall, hasLeft, markJoined, markLeft, prepareRejoin } = useCallLifecycle();
+const { isLobby, hasLeft, markJoined: markCallJoind, markLeft, prepareRejoin } = useCallLifecycle();
+
+const {
+  name,
+  trimmedName,
+  canSubmit: canSubmitJoin,
+  shouldRenderMeeting,
+  buttonLabel: joinButtonLabel,
+  errorMessage: joinErrorMessage,
+  beginJoin,
+  markParticipantCreated,
+  markClientLoaded,
+  markJoined: markJoinComplete,
+  fail: failJoin,
+  reset: resetJoin,
+} = useRoomJoin();
+
+const canJoinMeeting = computed(
+  () => canSubmitJoin.value && !roomLoading.value && !roomErrorMessage.value,
+);
 
 await loadRoom();
 
 const meetingEl = ref<RealtimeKitMeetingElement | null>(null);
 const activeMeeting = ref<RealtimeKitMeeting | null>(null);
-const name = ref("");
-const joining = ref(false);
-const errorMessage = ref("");
-
-const trimmedName = computed(() => name.value.trim());
 
 function detachMeetingEvents() {
   meetingEl.value?.removeEventListener(
@@ -63,27 +77,23 @@ function handleRealtimeKitStatesUpdate(event: Event) {
 
   detachMeetingEvents();
   activeMeeting.value = null;
+  resetJoin();
   markLeft();
 }
 
 async function joinMeeting() {
-  if (joining.value || roomLoading.value || roomErrorMessage.value || !trimmedName.value) {
+  if (!canJoinMeeting.value || !beginJoin()) {
     return;
   }
 
-  joining.value = true;
-  errorMessage.value = "";
-
   try {
-    const response = await $fetch<CreateParticipantResponse>(
-      `/api/meetings/${encodeURIComponent(roomId.value)}/participants`,
-      {
-        method: "POST",
-        body: { name: trimmedName.value },
-      },
-    );
+    const endpoint = `/api/meetings/${encodeURIComponent(roomId.value)}/participants`;
+    const response = await $fetch<CreateParticipantResponse>(endpoint, {
+      method: "POST",
+      body: { name: trimmedName.value },
+    });
 
-    const token = response.data.token;
+    markParticipantCreated();
 
     const [{ default: RealtimeKitClient }, { defineCustomElements }] = await Promise.all([
       import("@cloudflare/realtimekit"),
@@ -93,11 +103,11 @@ async function joinMeeting() {
     defineCustomElements();
 
     const meeting = await RealtimeKitClient.init({
-      authToken: token,
+      authToken: response.data.token,
     });
 
     activeMeeting.value = meeting;
-    markJoined();
+    markClientLoaded();
 
     await nextTick();
 
@@ -112,11 +122,14 @@ async function joinMeeting() {
     );
 
     await meeting.join();
+
+    markJoinComplete();
+    markCallJoind();
   } catch (error) {
     console.error(error);
-    errorMessage.value = "Could not join meeting. Please try again.";
-  } finally {
-    joining.value = false;
+    detachMeetingEvents();
+    activeMeeting.value = null;
+    failJoin();
   }
 }
 
@@ -124,7 +137,7 @@ function rejoinRoom() {
   detachMeetingEvents();
   activeMeeting.value = null;
   meetingEl.value = null;
-  errorMessage.value = "";
+  resetJoin();
   prepareRejoin();
 }
 
@@ -138,13 +151,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main v-if="isLobby" class="lobby">
+  <main v-if="isLobby && !shouldRenderMeeting" class="lobby">
     <section class="lobby-card">
       <h1>Join {{ roomTitle }}</h1>
 
       <p v-if="roomLoading">Loading room...</p>
-      <p v-else-if="roomErrorMessage" class="error-message">
-        {{ roomErrorMessage }}
+      <p v-else-if="joinErrorMessage" class="error-message">
+        {{ joinErrorMessage }}
       </p>
       <p v-else>Enter your name before joining the call.</p>
 
@@ -166,15 +179,12 @@ onBeforeUnmount(() => {
         <input v-model="name" type="text" placeholder="Your name" />
       </label>
 
-      <p v-if="errorMessage" class="error-message">
-        {{ errorMessage }}
+      <p v-if="joinErrorMessage" class="error-message">
+        {{ joinErrorMessage }}
       </p>
 
-      <button
-        :disabled="joining || roomLoading || !!roomErrorMessage || !trimmedName"
-        @click="joinMeeting"
-      >
-        {{ joining ? "Joining..." : "Join Meeting" }}
+      <button :disabled="!canJoinMeeting" @click="joinMeeting">
+        {{ joinButtonLabel }}
       </button>
     </section>
   </main>
@@ -191,7 +201,7 @@ onBeforeUnmount(() => {
     </section>
   </main>
 
-  <ClientOnly v-else-if="isInCall">
+  <ClientOnly v-else-if="shouldRenderMeeting">
     <main class="meeting-shell">
       <rtk-meeting ref="meetingEl" show-setup-screen="true" class="meeting" />
     </main>
