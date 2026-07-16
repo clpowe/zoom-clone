@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createRoom, findRoomById, listRooms, resetRoomsForTest } from "./rooms";
+import { createRoom, findRoomById, listRooms, resetRoomsForTest, type Room } from "./rooms";
+import * as roomRepository from "./rooms";
 
 describe("rooms", () => {
   beforeEach(() => {
@@ -49,5 +50,185 @@ describe("rooms", () => {
     });
 
     expect(listRooms()).toEqual([second, first]);
+  });
+
+  it("persists a created room in D1", async () => {
+    let preparedSql: string | undefined;
+    let boundValues: unknown[] | undefined;
+    let runCalls = 0;
+
+    const statement = {
+      bind(...values: unknown[]) {
+        boundValues = values;
+        return statement;
+      },
+      async run() {
+        runCalls++;
+        return { success: true };
+      },
+    };
+
+    const database = {
+      prepare(sql: string) {
+        preparedSql = sql;
+        return statement;
+      },
+    } as unknown as D1Database;
+
+    const createPersistentRoom = createRoom as unknown as (
+      input: Parameters<typeof createRoom>[0],
+      database: D1Database,
+    ) => Promise<Awaited<ReturnType<typeof createRoom>>>;
+
+    const room = await createPersistentRoom(
+      {
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+      },
+      database,
+    );
+
+    expect(preparedSql?.replace(/\s+/g, " ").trim()).toBe(
+      "INSERT INTO rooms (id, title, cloudflare_meeting_id, created_at) VALUES (?, ?, ?, ?)",
+    );
+    expect(boundValues).toEqual([room.id, "Team Standup", "cf-meeting-123", room.createdAt]);
+    expect(runCalls).toBe(1);
+  });
+
+  it("finds a room by id in D1", async () => {
+    let preparedSql: string | undefined;
+    let boundValues: unknown[] | undefined;
+
+    const statement = {
+      bind(...values: unknown[]) {
+        boundValues = values;
+        return statement;
+      },
+      async first() {
+        return {
+          id: "room-123",
+          title: "Team Standup",
+          cloudflare_meeting_id: "cf-meeting-123",
+          created_at: "2026-07-13T12:00:00.000Z",
+        };
+      },
+    };
+
+    const database = {
+      prepare(sql: string) {
+        preparedSql = sql;
+        return statement;
+      },
+    } as unknown as D1Database;
+
+    const findPersistentRoom = findRoomById as unknown as (
+      id: string,
+      database: D1Database,
+    ) => Promise<Room | undefined>;
+
+    const room = await findPersistentRoom("room-123", database);
+
+    expect(preparedSql?.replace(/\s+/g, " ").trim()).toBe(
+      "SELECT id, title, cloudflare_meeting_id, created_at FROM rooms WHERE id = ?",
+    );
+    expect(boundValues).toEqual(["room-123"]);
+    expect(room).toEqual({
+      id: "room-123",
+      title: "Team Standup",
+      cloudflareMeetingId: "cf-meeting-123",
+      createdAt: "2026-07-13T12:00:00.000Z",
+    });
+  });
+
+  it("lists D1 rooms newest first", async () => {
+    let preparedSql: string | undefined;
+
+    const database = {
+      prepare(sql: string) {
+        preparedSql = sql;
+
+        return {
+          async all() {
+            return {
+              success: true,
+              results: [
+                {
+                  id: "room-new",
+                  title: "Newest Room",
+                  cloudflare_meeting_id: "cf-meeting-new",
+                  created_at: "2026-07-13T13:00:00.000Z",
+                },
+                {
+                  id: "room-old",
+                  title: "Older Room",
+                  cloudflare_meeting_id: "cf-meeting-old",
+                  created_at: "2026-07-13T12:00:00.000Z",
+                },
+              ],
+            };
+          },
+        };
+      },
+    } as unknown as D1Database;
+
+    const listPersistentRooms = listRooms as unknown as (database: D1Database) => Promise<Room[]>;
+
+    const result = await listPersistentRooms(database);
+
+    expect(preparedSql?.replace(/\s+/g, " ").trim()).toBe(
+      "SELECT id, title, cloudflare_meeting_id, created_at FROM rooms ORDER BY created_at DESC",
+    );
+    expect(result).toEqual([
+      {
+        id: "room-new",
+        title: "Newest Room",
+        cloudflareMeetingId: "cf-meeting-new",
+        createdAt: "2026-07-13T13:00:00.000Z",
+      },
+      {
+        id: "room-old",
+        title: "Older Room",
+        cloudflareMeetingId: "cf-meeting-old",
+        createdAt: "2026-07-13T12:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("deletes a room from D1", async () => {
+    let preparedSql: string | undefined;
+    let boundValues: unknown[] | undefined;
+    let runCalls = 0;
+
+    const statement = {
+      bind(...values: unknown[]) {
+        boundValues = values;
+        return statement;
+      },
+      async run() {
+        runCalls++;
+        return { success: true };
+      },
+    };
+
+    const database = {
+      prepare(sql: string) {
+        preparedSql = sql;
+        return statement;
+      },
+    } as unknown as D1Database;
+
+    const deletePersistentRoom = (
+      roomRepository as typeof roomRepository & {
+        deleteRoom?: (id: string, database: D1Database) => Promise<void>;
+      }
+    ).deleteRoom;
+
+    expect(deletePersistentRoom).toBeTypeOf("function");
+
+    await deletePersistentRoom!("room-123", database);
+
+    expect(preparedSql?.replace(/\s+/g, " ").trim()).toBe("DELETE FROM rooms WHERE id = ?");
+    expect(boundValues).toEqual(["room-123"]);
+    expect(runCalls).toBe(1);
   });
 });
