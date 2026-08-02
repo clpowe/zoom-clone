@@ -1,5 +1,7 @@
 import { parseCreateRoomBody } from "../utils/room-request";
 import { createRoomForMeeting } from "../utils/create-room";
+import { createRoom, getRoomsDatabase } from "../utils/rooms";
+import { deleteCloudflareMeeting } from "../utils/realtimekit";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -16,8 +18,21 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const database = getRoomsDatabase(
+    event.context.cloudflare.env as unknown as {
+      ROOMS_D1: D1Database;
+    },
+  );
+
   const room = await createRoomForMeeting({
     title: parsedBody.title,
+    persistRoom: (input) => createRoom(input, database),
+    deleteCloudflareMeeting: (meetingId) =>
+      deleteCloudflareMeeting({
+        meetingId,
+        config: getRealtimeKitConfig(),
+        fetch: fetch,
+      }),
     createCloudflareMeeting: async ({ title }) => {
       const config = getRealtimeKitConfig();
       const response = await fetch(

@@ -231,4 +231,199 @@ describe("rooms", () => {
     expect(boundValues).toEqual(["room-123"]);
     expect(runCalls).toBe(1);
   });
+
+  it("deletes the persisted room when Cloudflare reports the meeting is already deleted", async () => {
+    let deletedRoomId: string | undefined;
+
+    await expect(
+      roomRepository.deleteRoomForMeeting({
+        room: {
+          id: "room-123",
+          title: "Team Standup",
+          cloudflareMeetingId: "cf-meeting-123",
+          createdAt: "2026-07-13T12:00:00.000Z",
+        },
+        deleteCloudflareMeeting: async () => {
+          throw Object.assign(new Error("Meeting not found"), {
+            statusCode: 404,
+          });
+        },
+        deletePersistedRoom: async (roomId) => {
+          deletedRoomId = roomId;
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(deletedRoomId).toBe("room-123");
+  });
+
+  it("finds the persisted room before coordinating its deletion", async () => {
+    const calls: string[] = [];
+
+    const deleteRoomById = (
+      roomRepository as typeof roomRepository & {
+        deleteRoomById?: (input: {
+          roomId: string;
+          findRoom: (roomId: string) => Promise<Room | undefined>;
+          deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
+          deletePersistedRoom: (roomId: string) => Promise<void>;
+        }) => Promise<void>;
+      }
+    ).deleteRoomById;
+
+    expect(deleteRoomById).toBeTypeOf("function");
+
+    await deleteRoomById!({
+      roomId: "room-123",
+      findRoom: async (roomId) => {
+        calls.push(`find:${roomId}`);
+
+        return {
+          id: roomId,
+          title: "Team Standup",
+          cloudflareMeetingId: "cf-meeting-123",
+          createdAt: "2026-07-13T12:00:00.000Z",
+        };
+      },
+      deleteCloudflareMeeting: async (meetingId) => {
+        calls.push(`cloudflare:${meetingId}`);
+      },
+      deletePersistedRoom: async (roomId) => {
+        calls.push(`d1:${roomId}`);
+      },
+    });
+
+    expect(calls).toEqual(["find:room-123", "cloudflare:cf-meeting-123", "d1:room-123"]);
+  });
+
+  it("reports 404 when deleting a room that does not exist", async () => {
+    await expect(
+      roomRepository.deleteRoomById({
+        roomId: "missing-room",
+        findRoom: async () => undefined,
+        deleteCloudflareMeeting: async () => {},
+        deletePersistedRoom: async () => {},
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: "Room not found",
+    });
+  });
+
+  it("returns persisted rooms for the rooms API", async () => {
+    const persistedRooms: Room[] = [
+      {
+        id: "room-123",
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+        createdAt: "2026-07-13T12:00:00.000Z",
+      },
+    ];
+
+    const listRoomsForRequest = (
+      roomRepository as typeof roomRepository & {
+        listRoomsForRequest?: (input: {
+          listPersistedRooms: () => Promise<Room[]>;
+        }) => Promise<{ data: Room[] }>;
+      }
+    ).listRoomsForRequest;
+
+    expect(listRoomsForRequest).toBeTypeOf("function");
+
+    await expect(
+      listRoomsForRequest!({
+        listPersistedRooms: async () => persistedRooms,
+      }),
+    ).resolves.toEqual({
+      data: persistedRooms,
+    });
+  });
+
+  it("reads the rooms D1 binding from an injected enviroment", () => {
+    const database = {} as D1Database;
+
+    const getRoomsDatabase = (
+      roomRepository as typeof roomRepository & {
+        getRoomsDatabase?: (environment: { ROOMS_D1: D1Database }) => D1Database;
+      }
+    ).getRoomsDatabase;
+
+    expect(getRoomsDatabase).toBeTypeOf("function");
+    expect(getRoomsDatabase!({ ROOMS_D1: database })).toBe(database);
+  });
+  it("lists rooms through an injected D1 database", async () => {
+    const database = {} as D1Database;
+    const persistedRooms: Room[] = [
+      {
+        id: "room-123",
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+        createdAt: "2026-07-13T12:00:00.000Z",
+      },
+    ];
+    let queriedDatabase: D1Database | undefined;
+
+    const listRoomsFromD1ForRequest = (
+      roomRepository as typeof roomRepository & {
+        listRoomsFromD1ForRequest?: (input: {
+          database: D1Database;
+          listPersistedRooms: (database: D1Database) => Promise<Room[]>;
+        }) => Promise<{ data: Room[] }>;
+      }
+    ).listRoomsFromD1ForRequest;
+
+    expect(listRoomsFromD1ForRequest).toBeTypeOf("function");
+
+    await expect(
+      listRoomsFromD1ForRequest!({
+        database,
+        listPersistedRooms: async (receivedDatabase) => {
+          queriedDatabase = receivedDatabase;
+          return persistedRooms;
+        },
+      }),
+    ).resolves.toEqual({
+      data: persistedRooms,
+    });
+
+    expect(queriedDatabase).toBe(database);
+  });
+
+  it("lists rooms from the Cloudflare request environment", async () => {
+    const database = {} as D1Database;
+    const persistedRooms: Room[] = [
+      {
+        id: "room-123",
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+        createdAt: "2026-07-13T12:00:00.000Z",
+      },
+    ];
+    let queriedDatabase: D1Database | undefined;
+
+    const listRoomsForCloudflareRequest = (
+      roomRepository as typeof roomRepository & {
+        listRoomsForCloudflareRequest?: (input: {
+          environment: { ROOMS_D1: D1Database };
+          listPersistedRooms: (database: D1Database) => Promise<Room[]>;
+        }) => Promise<{ data: Room[] }>;
+      }
+    ).listRoomsForCloudflareRequest;
+
+    expect(listRoomsForCloudflareRequest).toBeTypeOf("function");
+
+    await expect(
+      listRoomsForCloudflareRequest!({
+        environment: { ROOMS_D1: database },
+        listPersistedRooms: async (receivedDatabase) => {
+          queriedDatabase = receivedDatabase;
+          return persistedRooms;
+        },
+      }),
+    ).resolves.toEqual({
+      data: persistedRooms,
+    });
+
+    expect(queriedDatabase).toBe(database);
+  });
 });

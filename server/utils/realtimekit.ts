@@ -37,3 +37,30 @@ export function getRealtimeKitConfig(): RealtimeKitRuntimeConfig {
 export async function readCloudflareJsonResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
+
+export async function deleteCloudflareMeeting(input: {
+  meetingId: string;
+  config: {
+    cloudflareAccountId: string;
+    realtimekitAppId: string;
+    cloudflareApiToken: string;
+  };
+  fetch: typeof fetch;
+}): Promise<void> {
+  const response = await input.fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${input.config.cloudflareAccountId}/realtime/kit/${input.config.realtimekitAppId}/meetings/${input.meetingId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${input.config.cloudflareApiToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw Object.assign(new Error("Failed to delete meeting"), {
+      statusCode: response.status,
+      statusMessage: "Failed to delete meeting",
+    });
+  }
+}

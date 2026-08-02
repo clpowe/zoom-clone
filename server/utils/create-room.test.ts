@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { findRoomById, resetRoomsForTest } from "./rooms";
 import { createRoomForMeeting } from "./create-room";
+import * as roomRepository from "./rooms";
 
 describe("createRoomForMeeting", () => {
   beforeEach(() => {
@@ -145,5 +146,38 @@ describe("createRoomForMeeting", () => {
         },
       }),
     ).rejects.toBe(persistenceError);
+  });
+
+  it("deletes the Cloudflare meeting before deleting the persisted room", async () => {
+    const calls: string[] = [];
+
+    const deleteRoomForMeeting = (
+      roomRepository as typeof roomRepository & {
+        deleteRoomForMeeting?: (input: {
+          room: Room;
+          deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
+          deletePersistedRoom: (roomId: string) => Promise<void>;
+        }) => Promise<void>;
+      }
+    ).deleteRoomForMeeting;
+
+    expect(deleteRoomForMeeting).toBeTypeOf("function");
+
+    await deleteRoomForMeeting!({
+      room: {
+        id: "room-123",
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+        createdAt: "2026-07-13T12:00:00.000Z",
+      },
+      deleteCloudflareMeeting: async (meetingId) => {
+        calls.push(`cloudflare:${meetingId}`);
+      },
+      deletePersistedRoom: async (roomId) => {
+        calls.push(`d1:${roomId}`);
+      },
+    });
+
+    expect(calls).toEqual(["cloudflare:cf-meeting-123", "d1:room-123"]);
   });
 });

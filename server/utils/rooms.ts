@@ -122,3 +122,76 @@ export function resetRoomsForTest() {
   rooms.clear();
   nextRoomOrder = 0;
 }
+
+export async function deleteRoomById(input: {
+  roomId: string;
+  findRoom: (roomId: string) => Promise<Room | undefined>;
+  deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
+  deletePersistedRoom: (roomId: string) => Promise<void>;
+}): Promise<void> {
+  const room = await input.findRoom(input.roomId);
+
+  if (!room) {
+    throw Object.assign(new Error("Room not found"), {
+      statusCode: 404,
+      statusMessage: "Room not found",
+    });
+  }
+
+  await deleteRoomForMeeting({
+    room,
+    deleteCloudflareMeeting: input.deleteCloudflareMeeting,
+    deletePersistedRoom: input.deletePersistedRoom,
+  });
+}
+
+export async function deleteRoomForMeeting(input: {
+  room: Room;
+  deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
+  deletePersistedRoom: (roomId: string) => Promise<void>;
+}): Promise<void> {
+  try {
+    await input.deleteCloudflareMeeting(input.room.cloudflareMeetingId);
+  } catch (error) {
+    if (
+      !error ||
+      typeof error !== "object" ||
+      !("statusCode" in error) ||
+      error.statusCode !== 404
+    ) {
+      throw error;
+    }
+  }
+  await input.deletePersistedRoom(input.room.id);
+}
+
+export async function listRoomsForRequest(input: {
+  listPersistedRooms: () => Promise<Room[]>;
+}): Promise<{ data: Room[] }> {
+  return {
+    data: await input.listPersistedRooms(),
+  };
+}
+
+export function getRoomsDatabase(environment: { ROOMS_D1: D1Database }): D1Database {
+  return environment.ROOMS_D1;
+}
+
+export async function listRoomsFromD1ForRequest(input: {
+  database: D1Database;
+  listPersistedRooms: (database: D1Database) => Promise<Room[]>;
+}): Promise<{ data: Room[] }> {
+  return {
+    data: await input.listPersistedRooms(input.database),
+  };
+}
+
+export async function listRoomsForCloudflareRequest(input: {
+  environment: { ROOMS_D1: D1Database };
+  listPersistedRooms: (database: D1Database) => Promise<Room[]>;
+}): Promise<{ data: Room[] }> {
+  return listRoomsFromD1ForRequest({
+    database: getRoomsDatabase(input.environment),
+    listPersistedRooms: input.listPersistedRooms,
+  });
+}
