@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   const database = getRoomsDatabase(
     event.context.cloudflare.env as unknown as {
-      ROOMS_D1: D1Database;
+      zoom_clone_rooms: D1Database;
     },
   );
 

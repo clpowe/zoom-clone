@@ -173,8 +173,8 @@ export async function listRoomsForRequest(input: {
   };
 }
 
-export function getRoomsDatabase(environment: { ROOMS_D1: D1Database }): D1Database {
-  return environment.ROOMS_D1;
+export function getRoomsDatabase(environment: { zoom_clone_rooms: D1Database }): D1Database {
+  return environment.zoom_clone_rooms;
 }
 
 export async function listRoomsFromD1ForRequest(input: {
@@ -187,7 +187,7 @@ export async function listRoomsFromD1ForRequest(input: {
 }
 
 export async function listRoomsForCloudflareRequest(input: {
-  environment: { ROOMS_D1: D1Database };
+  environment: { zoom_clone_rooms: D1Database };
   listPersistedRooms: (database: D1Database) => Promise<Room[]>;
 }): Promise<{ data: Room[] }> {
   return listRoomsFromD1ForRequest({

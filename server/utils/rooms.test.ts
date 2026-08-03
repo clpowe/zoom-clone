@@ -339,18 +339,23 @@ describe("rooms", () => {
     });
   });
 
-  it("reads the rooms D1 binding from an injected enviroment", () => {
+  it("reads the rooms D1 binding from an injected environment", () => {
     const database = {} as D1Database;
 
     const getRoomsDatabase = (
       roomRepository as typeof roomRepository & {
-        getRoomsDatabase?: (environment: { ROOMS_D1: D1Database }) => D1Database;
+        getRoomsDatabase?: (environment: { zoom_clone_rooms: D1Database }) => D1Database;
       }
     ).getRoomsDatabase;
 
     expect(getRoomsDatabase).toBeTypeOf("function");
-    expect(getRoomsDatabase!({ ROOMS_D1: database })).toBe(database);
+    expect(
+      getRoomsDatabase!({
+        zoom_clone_rooms: database,
+      }),
+    ).toBe(database);
   });
+
   it("lists rooms through an injected D1 database", async () => {
     const database = {} as D1Database;
     const persistedRooms: Room[] = [
@@ -404,7 +409,7 @@ describe("rooms", () => {
     const listRoomsForCloudflareRequest = (
       roomRepository as typeof roomRepository & {
         listRoomsForCloudflareRequest?: (input: {
-          environment: { ROOMS_D1: D1Database };
+          environment: { zoom_clone_rooms: D1Database };
           listPersistedRooms: (database: D1Database) => Promise<Room[]>;
         }) => Promise<{ data: Room[] }>;
       }
@@ -414,7 +419,7 @@ describe("rooms", () => {
 
     await expect(
       listRoomsForCloudflareRequest!({
-        environment: { ROOMS_D1: database },
+        environment: { zoom_clone_rooms: database },
         listPersistedRooms: async (receivedDatabase) => {
           queriedDatabase = receivedDatabase;
           return persistedRooms;

@@ -33,14 +33,14 @@ describe("GET /api/rooms", () => {
       handler as (event: {
         context: {
           cloudflare: {
-            env: { ROOMS_D1: D1Database };
+            env: { zoom_clone_rooms: D1Database };
           };
         };
       }) => Promise<unknown>
     )({
       context: {
         cloudflare: {
-          env: { ROOMS_D1: database },
+          env: { zoom_clone_rooms: database },
         },
       },
     });

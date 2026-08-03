@@ -52,14 +52,14 @@ describe("POST /api/rooms", () => {
       handler as unknown as (event: {
         context: {
           cloudflare: {
-            env: { ROOMS_D1: D1Database };
+            env: { zoom_clone_rooms: D1Database };
           };
         };
       }) => Promise<unknown>
     )({
       context: {
         cloudflare: {
-          env: { ROOMS_D1: database },
+          env: { zoom_clone_rooms: database },
         },
       },
     });
@@ -137,14 +137,14 @@ describe("POST /api/rooms", () => {
         handler as unknown as (event: {
           context: {
             cloudflare: {
-              env: { ROOMS_D1: D1Database };
+              env: { zoom_clone_rooms: D1Database };
             };
           };
         }) => Promise<unknown>
       )({
         context: {
           cloudflare: {
-            env: { ROOMS_D1: database },
+            env: { zoom_clone_rooms: database },
           },
         },
       }),
