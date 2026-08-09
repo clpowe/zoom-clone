@@ -7,6 +7,7 @@ const {
   loading: roomsLoading,
   errorMessage: roomsErrorMessage,
   refreshRooms,
+  deleteRoom,
 } = useRooms();
 </script>
 
@@ -53,19 +54,24 @@ const {
         </div>
 
         <p v-if="roomsLoading" class="muted-message">Loading rooms...</p>
-        <p v-else-if="roomsErrorMessage" class="error-message">
+        <p v-if="roomsErrorMessage" class="error-message">
           {{ roomsErrorMessage }}
         </p>
-        <p v-else-if="!hasRooms" class="muted-message">No rooms yet. Create one to get started.</p>
+        <p v-if="!roomsLoading && !hasRooms" class="muted-message">
+          No rooms yet. Create one to get started.
+        </p>
 
-        <ul v-else class="room-list">
+        <ul v-if="!roomsLoading && hasRooms" class="room-list">
           <li v-for="room in rooms" :key="room.id" class="room-item">
             <div>
               <h3>{{ room.title }}</h3>
               <p>{{ new Date(room.createdAt).toLocaleString() }}</p>
             </div>
 
-            <NuxtLink :to="`/room/${room.id}`">Join</NuxtLink>
+            <div class="room-actions">
+              <NuxtLink :to="`/room/${room.id}`">Join</NuxtLink>
+              <button type="button" @click="deleteRoom(room.id)">Delete</button>
+            </div>
           </li>
         </ul>
       </section>
@@ -161,7 +167,8 @@ const {
 }
 
 .create-room-form button,
-.room-item a {
+.room-item a,
+.room-item button {
   border: none;
   border-radius: 10px;
   background: #2563eb;
@@ -174,7 +181,8 @@ const {
 }
 
 .create-room-form button:hover:not(:disabled),
-.room-item a:hover {
+.room-item a:hover,
+.room-item button:hover {
   background: #1d4ed8;
 }
 
@@ -232,6 +240,11 @@ const {
   margin: 0;
   color: #fca5a5;
   font-size: 0.9rem;
+}
+
+.room-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 @media (max-width: 760px) {

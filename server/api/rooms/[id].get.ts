@@ -1,3 +1,6 @@
+import { getRoomByIdOrThrow } from "../../utils/room-lookup";
+import { findRoomById, getRoomsDatabase } from "../../utils/rooms";
+
 export default defineEventHandler(async (event) => {
   const roomId = getRouterParam(event, "id");
 
@@ -8,7 +11,13 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const database = getRoomsDatabase(
+    event.context.cloudflare.env as unknown as {
+      zoom_clone_rooms: D1Database;
+    },
+  );
+
   return {
-    data: getRoomByIdOrThrow(roomId),
+    data: await getRoomByIdOrThrow(roomId, (id) => findRoomById(id, database)),
   };
 });

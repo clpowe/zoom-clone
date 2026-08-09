@@ -1,4 +1,4 @@
-import { createRoom, type Room } from "./rooms";
+import type { Room } from "./rooms";
 
 type CloudflareMeeting = {
   id: string;
@@ -8,16 +8,16 @@ type CreateCloudflareMeetingInput = {
   title: string;
 };
 
-type CreateRoomForMeetingInput = {
-  title: string;
-  persistRoom?: (input: PersistRoomInput) => Promise<Room>;
-  createCloudflareMeeting: (input: CreateCloudflareMeetingInput) => Promise<CloudflareMeeting>;
-  deleteCloudflareMeeting?: (meetingId: string) => Promise<void>;
-};
-
 type PersistRoomInput = {
   title: string;
   cloudflareMeetingId: string;
+};
+
+type CreateRoomForMeetingInput = {
+  title: string;
+  persistRoom: (input: PersistRoomInput) => Promise<Room>;
+  createCloudflareMeeting: (input: CreateCloudflareMeetingInput) => Promise<CloudflareMeeting>;
+  deleteCloudflareMeeting?: (meetingId: string) => Promise<void>;
 };
 
 function createRoomError(statusCode: number, statusMessage: string) {
@@ -36,21 +36,16 @@ export async function createRoomForMeeting(input: CreateRoomForMeetingInput): Pr
 
   const meeting = await input.createCloudflareMeeting({ title });
 
-  const roomInput = {
-    title,
-    cloudflareMeetingId: meeting.id,
-  };
-
-  if (input.persistRoom) {
-    try {
-      return await input.persistRoom(roomInput);
-    } catch (error) {
-      if (input.deleteCloudflareMeeting) {
-        await input.deleteCloudflareMeeting(meeting.id).catch(() => undefined);
-      }
-      throw error;
+  try {
+    return await input.persistRoom({
+      title,
+      cloudflareMeetingId: meeting.id,
+    });
+  } catch (error) {
+    if (input.deleteCloudflareMeeting) {
+      await input.deleteCloudflareMeeting(meeting.id).catch(() => undefined);
     }
-  }
 
-  return createRoom(roomInput);
+    throw error;
+  }
 }

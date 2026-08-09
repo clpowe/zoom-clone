@@ -35,7 +35,13 @@ const {
   copyInviteLink,
 } = useRoomInvite(roomId.value);
 
-const { isLobby, hasLeft, markJoined: markCallJoind, markLeft, prepareRejoin } = useCallLifecycle();
+const {
+  isLobby,
+  hasLeft,
+  markJoined: markCallJoined,
+  markLeft,
+  prepareRejoin,
+} = useCallLifecycle();
 
 const {
   name,
@@ -124,7 +130,7 @@ async function joinMeeting() {
     await meeting.join();
 
     markJoinComplete();
-    markCallJoind();
+    markCallJoined();
   } catch (error) {
     console.error(error);
     detachMeetingEvents();
@@ -179,8 +185,8 @@ onBeforeUnmount(() => {
         <input v-model="name" type="text" placeholder="Your name" />
       </label>
 
-      <p v-if="joinErrorMessage" class="error-message">
-        {{ joinErrorMessage }}
+      <p v-if="roomErrorMessage" class="error-message">
+        {{ roomErrorMessage }}
       </p>
 
       <button :disabled="!canJoinMeeting" @click="joinMeeting">

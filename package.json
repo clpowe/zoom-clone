@@ -22,11 +22,16 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@nuxt/test-utils": "^4.1.0",
     "@types/node": "^25.9.1",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.11.1",
     "nitro-cloudflare-dev": "^0.2.2",
     "nitropack": "^2.13.4",
+    "typescript": "^7.0.2",
     "vite-plus": "latest",
-    "vitest": "^4.1.9",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.9",
     "wrangler": "^4.93.1"
   },
   "packageManager": "pnpm@11.2.2"

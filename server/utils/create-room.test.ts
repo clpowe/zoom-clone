@@ -1,32 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { findRoomById, resetRoomsForTest } from "./rooms";
+import { describe, expect, it } from "vitest";
 import { createRoomForMeeting } from "./create-room";
-import * as roomRepository from "./rooms";
+import { deleteRoomForMeeting, type Room } from "./rooms";
 
 describe("createRoomForMeeting", () => {
-  beforeEach(() => {
-    resetRoomsForTest();
-  });
-
-  it("creates a local room from a title and Cloudflare meeting response", async () => {
-    const room = await createRoomForMeeting({
-      title: "Team Standup",
-      createCloudflareMeeting: async () => ({
-        id: "cf-meeting-123",
-      }),
-    });
-
-    expect(room).toEqual({
-      id: expect.any(String),
-      title: "Team Standup",
-      cloudflareMeetingId: "cf-meeting-123",
-      createdAt: expect.any(String),
-    });
-    expect(findRoomById(room.id)).toEqual(room);
-  });
-
-  it("trims the title before creating the Cloudflare meeting and local room", async () => {
+  it("trims the title before creating and persisting the room", async () => {
     let cloudflareTitle = "";
+    let persistedTitle = "";
 
     const room = await createRoomForMeeting({
       title: "  Family Call  ",
@@ -34,9 +13,20 @@ describe("createRoomForMeeting", () => {
         cloudflareTitle = title;
         return { id: "cf-meeting-456" };
       },
+      persistRoom: async (input) => {
+        persistedTitle = input.title;
+
+        return {
+          id: "room-456",
+          title: input.title,
+          cloudflareMeetingId: input.cloudflareMeetingId,
+          createdAt: "2026-07-13T12:00:00.000Z",
+        };
+      },
     });
 
     expect(cloudflareTitle).toBe("Family Call");
+    expect(persistedTitle).toBe("Family Call");
     expect(room.title).toBe("Family Call");
   });
 
@@ -47,6 +37,9 @@ describe("createRoomForMeeting", () => {
         createCloudflareMeeting: async () => ({
           id: "cf-meeting-789",
         }),
+        persistRoom: async () => {
+          throw new Error("Persistence should not be called");
+        },
       }),
     ).rejects.toMatchObject({
       statusCode: 400,
@@ -69,13 +62,7 @@ describe("createRoomForMeeting", () => {
       createdAt: "2026-07-13T12:00:00.000Z",
     };
 
-    const createPersistentRoomForMeeting = createRoomForMeeting as unknown as (input: {
-      title: string;
-      createCloudflareMeeting: (input: { title: string }) => Promise<{ id: string }>;
-      persistRoom: (input: { title: string; cloudflareMeetingId: string }) => Promise<Room>;
-    }) => Promise<Room>;
-
-    const room = await createPersistentRoomForMeeting({
+    const room = await createRoomForMeeting({
       title: "Team Standup",
       createCloudflareMeeting: async () => ({
         id: "cf-meeting-123",
@@ -97,15 +84,8 @@ describe("createRoomForMeeting", () => {
     const persistenceError = new Error("D1 insert failed");
     let deletedMeetingId: string | undefined;
 
-    const createPersistentRoomForMeeting = createRoomForMeeting as unknown as (input: {
-      title: string;
-      createCloudflareMeeting: (input: { title: string }) => Promise<{ id: string }>;
-      persistRoom: (input: { title: string; cloudflareMeetingId: string }) => Promise<Room>;
-      deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
-    }) => Promise<Room>;
-
     await expect(
-      createPersistentRoomForMeeting({
+      createRoomForMeeting({
         title: "Team Standup",
         createCloudflareMeeting: async () => ({
           id: "cf-meeting-123",
@@ -125,15 +105,8 @@ describe("createRoomForMeeting", () => {
   it("preserves the persistence error when Cloudflare cleanup also fails", async () => {
     const persistenceError = new Error("D1 insert failed");
 
-    const createPersistentRoomForMeeting = createRoomForMeeting as unknown as (input: {
-      title: string;
-      createCloudflareMeeting: (input: { title: string }) => Promise<{ id: string }>;
-      persistRoom: (input: { title: string; cloudflareMeetingId: string }) => Promise<Room>;
-      deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
-    }) => Promise<Room>;
-
     await expect(
-      createPersistentRoomForMeeting({
+      createRoomForMeeting({
         title: "Team Standup",
         createCloudflareMeeting: async () => ({
           id: "cf-meeting-123",
@@ -151,19 +124,7 @@ describe("createRoomForMeeting", () => {
   it("deletes the Cloudflare meeting before deleting the persisted room", async () => {
     const calls: string[] = [];
 
-    const deleteRoomForMeeting = (
-      roomRepository as typeof roomRepository & {
-        deleteRoomForMeeting?: (input: {
-          room: Room;
-          deleteCloudflareMeeting: (meetingId: string) => Promise<void>;
-          deletePersistedRoom: (roomId: string) => Promise<void>;
-        }) => Promise<void>;
-      }
-    ).deleteRoomForMeeting;
-
-    expect(deleteRoomForMeeting).toBeTypeOf("function");
-
-    await deleteRoomForMeeting!({
+    await deleteRoomForMeeting({
       room: {
         id: "room-123",
         title: "Team Standup",

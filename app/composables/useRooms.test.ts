@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, ref } from "vue";
 import { loadRooms } from "./useRooms";
 import * as roomOperations from "./useRooms";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("loadRooms", () => {
   it("loads rooms from the API response", async () => {
@@ -125,6 +129,7 @@ describe("useRooms deletion", () => {
 
     vi.stubGlobal("ref", ref);
     vi.stubGlobal("computed", computed);
+    vi.stubGlobal("onMounted", () => {});
     vi.stubGlobal("$fetch", async (endpoint: string, options?: { method?: string }) => {
       requests.push({
         endpoint,
@@ -154,6 +159,49 @@ describe("useRooms deletion", () => {
       {
         endpoint: "/api/rooms",
         method: undefined,
+      },
+    ]);
+  });
+});
+
+describe("useRooms initial loading", () => {
+  it("loads recent rooms when mounted", async () => {
+    let mountedCallback: (() => Promise<void>) | undefined;
+    const requestedEndpoints: string[] = [];
+
+    vi.stubGlobal("ref", ref);
+    vi.stubGlobal("computed", computed);
+    vi.stubGlobal("onMounted", (callback: () => Promise<void>) => {
+      mountedCallback = callback;
+    });
+    vi.stubGlobal("$fetch", async (endpoint: string) => {
+      requestedEndpoints.push(endpoint);
+
+      return {
+        data: [
+          {
+            id: "room-123",
+            title: "Team Standup",
+            cloudflareMeetingId: "cf-meeting-123",
+            createdAt: "2026-07-13T12:00:00.000Z",
+          },
+        ],
+      };
+    });
+
+    const roomsState = roomOperations.useRooms();
+
+    expect(mountedCallback).toBeTypeOf("function");
+
+    await mountedCallback!();
+
+    expect(requestedEndpoints).toEqual(["/api/rooms"]);
+    expect(roomsState.rooms.value).toEqual([
+      {
+        id: "room-123",
+        title: "Team Standup",
+        cloudflareMeetingId: "cf-meeting-123",
+        createdAt: "2026-07-13T12:00:00.000Z",
       },
     ]);
   });

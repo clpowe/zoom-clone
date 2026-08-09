@@ -1,3 +1,5 @@
+import { getRoomByIdOrThrow } from "../../../utils/room-lookup";
+import { findRoomById, getRoomsDatabase } from "../../../utils/rooms";
 import { z } from "zod";
 
 const createParticipantBodySchema = z.object({
@@ -15,7 +17,13 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const room = getRoomByIdOrThrow(roomId);
+  const database = getRoomsDatabase(
+    event.context.cloudflare.env as unknown as {
+      zoom_clone_rooms: D1Database;
+    },
+  );
+
+  const room = await getRoomByIdOrThrow(roomId, (id) => findRoomById(id, database));
 
   const body = await readBody(event);
   const result = createParticipantBodySchema.safeParse(body);

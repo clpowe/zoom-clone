@@ -1,4 +1,4 @@
-import { findRoomById, type Room } from "./rooms";
+import type { Room } from "./rooms";
 
 type FindRoom = (id: string) => Promise<Room | undefined>;
 
@@ -9,20 +9,8 @@ function createRoomNotFoundError() {
   });
 }
 
-export function getRoomByIdOrThrow(id: string): Room;
-export function getRoomByIdOrThrow(id: string, findRoom: FindRoom): Promise<Room>;
-export function getRoomByIdOrThrow(id: string, findRoom?: FindRoom): Room | Promise<Room> {
-  if (findRoom) {
-    return findRoom(id).then((room) => {
-      if (!room) {
-        throw createRoomNotFoundError();
-      }
-
-      return room;
-    });
-  }
-
-  const room = findRoomById(id);
+export async function getRoomByIdOrThrow(id: string, findRoom: FindRoom): Promise<Room> {
+  const room = await findRoom(id);
 
   if (!room) {
     throw createRoomNotFoundError();

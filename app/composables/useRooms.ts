@@ -97,6 +97,8 @@ export function useRooms() {
     }
   }
 
+  onMounted(refreshRooms);
+
   return {
     rooms,
     hasRooms,
