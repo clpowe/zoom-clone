@@ -91,14 +91,26 @@ export function createRoomJoin() {
     return transition("submit");
   }
 
-  function fail(message = "Could not join meeting. Please try again.") {
+  function fail(error?: unknown) {
     const didTransition = transition("failed");
 
-    if (didTransition) {
-      errorMessage.value = message;
+    if (!didTransition) {
+      return false;
     }
 
-    return didTransition;
+    const statusCode =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? error.statusCode
+        : undefined;
+
+    if (statusCode === 404) {
+      errorMessage.value = "This room is no longer available.";
+    } else if (error instanceof TypeError) {
+      errorMessage.value = "Could not connect. Check your internet connection and try again.";
+    } else {
+      errorMessage.value = "Could not join meeting. Please try again.";
+    }
+    return true;
   }
 
   function reset() {

@@ -8,6 +8,20 @@ type RealtimeKitStateUpdate = {
   roomLeftState?: string;
 };
 
+type SocketConnectionUpdate = {
+  state: "connected" | "reconnecting" | "disconnected" | "failed";
+  reconnected: boolean;
+  reconnectionAttempt: number;
+};
+
+type ConnectionEventSource = {
+  on: (event: "socketConnectionUpdate", listener: (update: SocketConnectionUpdate) => void) => void;
+  off: (
+    event: "socketConnectionUpdate",
+    listener: (update: SocketConnectionUpdate) => void,
+  ) => void;
+};
+
 const transitions: Record<
   CallLifecycleState,
   Partial<Record<CallLifecycleEvent, CallLifecycleState>>
@@ -29,6 +43,7 @@ export function isRealtimeKitEndedState(state: RealtimeKitStateUpdate) {
 
 export function createCallLifecycle() {
   const state = ref<CallLifecycleState>("lobby");
+  const connectionMessage = ref("");
 
   const isLobby = computed(() => state.value === "lobby");
   const isInCall = computed(() => state.value === "in-call");
@@ -45,14 +60,69 @@ export function createCallLifecycle() {
     return true;
   }
 
+  function markReconnecting() {
+    if (!isInCall.value) {
+      return false;
+    }
+
+    connectionMessage.value = "Reconnecting...";
+    return true;
+  }
+
+  function markConnected() {
+    connectionMessage.value = "Connected";
+    return true;
+  }
+
+  function markDisconnected() {
+    connectionMessage.value = "Connection lost. Check your internet connection and try again.";
+
+    return true;
+  }
+
+  function updateConnection(
+    connectionState: "connected" | "reconnecting" | "disconnected" | "failed",
+  ) {
+    if (connectionState === "reconnecting") {
+      return markReconnecting();
+    }
+
+    if (connectionState === "connected") {
+      return markConnected();
+    }
+
+    if (connectionState === "disconnected" || connectionState === "failed") {
+      return markDisconnected();
+    }
+    return false;
+  }
+
+  function attachConnectionEvents(source: ConnectionEventSource) {
+    const handleConnectionUpdate = (update: SocketConnectionUpdate) => {
+      updateConnection(update.state);
+    };
+
+    source.on("socketConnectionUpdate", handleConnectionUpdate);
+
+    return () => {
+      source.off("socketConnectionUpdate", handleConnectionUpdate);
+    };
+  }
+
   return {
     state,
+    connectionMessage,
     isLobby,
     isInCall,
     hasLeft,
     markJoined: () => transition("joined"),
     markLeft: () => transition("left"),
     prepareRejoin: () => transition("rejoin"),
+    markReconnecting,
+    markConnected,
+    markDisconnected,
+    updateConnection,
+    attachConnectionEvents,
   };
 }
 

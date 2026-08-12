@@ -72,4 +72,28 @@ describe("createRoomJoin", () => {
     expect(join.state.value).toBe("idle");
     expect(join.canSubmit.value).toBe(true);
   });
+
+  it("explains when the room is no longer available", () => {
+    const join = createRoomJoin();
+    join.name.value = "Chris";
+    join.beginJoin();
+
+    join.fail({
+      statusCode: 404,
+    } as never);
+
+    expect(join.errorMessage.value).toBe("This room is no longer available.");
+  });
+
+  it("explains when joining fails because of the network", () => {
+    const join = createRoomJoin();
+    join.name.value = "Chris";
+    join.beginJoin();
+
+    join.fail(new TypeError("Failed to fetch"));
+
+    expect(join.errorMessage.value).toBe(
+      "Could not connect. Check your internet connection and try again.",
+    );
+  });
 });

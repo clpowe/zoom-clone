@@ -38,9 +38,11 @@ const {
 const {
   isLobby,
   hasLeft,
+  connectionMessage,
   markJoined: markCallJoined,
   markLeft,
   prepareRejoin,
+  attachConnectionEvents,
 } = useCallLifecycle();
 
 const {
@@ -66,8 +68,12 @@ await loadRoom();
 
 const meetingEl = ref<RealtimeKitMeetingElement | null>(null);
 const activeMeeting = ref<RealtimeKitMeeting | null>(null);
+let detachConnectionEvents: (() => void) | undefined;
 
 function detachMeetingEvents() {
+  detachConnectionEvents?.();
+  detachConnectionEvents = undefined;
+
   meetingEl.value?.removeEventListener(
     "rtkStatesUpdate",
     handleRealtimeKitStatesUpdate as EventListener,
@@ -127,6 +133,8 @@ async function joinMeeting() {
       handleRealtimeKitStatesUpdate as EventListener,
     );
 
+    detachConnectionEvents = attachConnectionEvents(meeting.meta);
+
     await meeting.join();
 
     markJoinComplete();
@@ -135,7 +143,7 @@ async function joinMeeting() {
     console.error(error);
     detachMeetingEvents();
     activeMeeting.value = null;
-    failJoin();
+    failJoin(error);
   }
 }
 
@@ -209,6 +217,10 @@ onBeforeUnmount(() => {
 
   <ClientOnly v-else-if="shouldRenderMeeting">
     <main class="meeting-shell">
+      <p v-if="connectionMessage" class="connection-status" role="status" aria-live="polite">
+        {{ connectionMessage }}
+      </p>
+
       <rtk-meeting ref="meetingEl" show-setup-screen="true" class="meeting" />
     </main>
   </ClientOnly>
@@ -302,6 +314,7 @@ onBeforeUnmount(() => {
 }
 
 .meeting-shell {
+  position: relative;
   min-height: 100vh;
   background: #0a0a0a;
 }
@@ -315,5 +328,23 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #fca5a5;
   font-size: 0.9rem;
+}
+
+.connection-status {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 10;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  transform: translateX(-50%);
+  border: 1px solid #404040;
+  border-radius: 999px;
+  background: rgb(23 23 23 / 92%);
+  color: white;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  text-align: center;
 }
 </style>
