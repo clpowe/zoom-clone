@@ -53,6 +53,7 @@ vi.mock("@cloudflare/realtimekit-ui/loader", () => ({
 
 beforeEach(() => {
   realtimeKit.reset();
+  window.localStorage.clear();
 });
 
 registerEndpoint("/api/rooms/room-123", () => {
@@ -99,6 +100,18 @@ registerEndpoint("/api/meetings/unavailable-room/participants", {
 });
 
 describe("room page loading", () => {
+  it("restores the participant name when revisiting a room", async () => {
+    window.localStorage.setItem("zoom-clone-participant-name", "Chris");
+
+    const wrapper = await mountSuspended(RoomPage, {
+      route: "/room/connected-room",
+    });
+
+    expect(wrapper.get<HTMLInputElement>('input[placeholder="Your name"]').element.value).toBe(
+      "Chris",
+    );
+  });
+
   it("displays the room-loading error", async () => {
     const wrapper = await mountSuspended(RoomPage, {
       route: "/room/room-123",
@@ -120,6 +133,8 @@ describe("room page loading", () => {
 
     await joinButton!.trigger("click");
     await flushPromises();
+
+    expect(window.localStorage.getItem("zoom-clone-participant-name")).toBe("Chris");
 
     realtimeKit.emitConnection({
       state: "reconnecting",

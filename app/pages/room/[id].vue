@@ -18,6 +18,8 @@ type RealtimeKitStatesUpdateEvent = CustomEvent<{
   roomLeftState?: string;
 }>;
 
+const participantNameStorageKey = "zoom-clone-participant-name";
+
 const route = useRoute();
 
 const roomId = computed(() => String(route.params.id ?? ""));
@@ -70,6 +72,22 @@ const meetingEl = ref<RealtimeKitMeetingElement | null>(null);
 const activeMeeting = ref<RealtimeKitMeeting | null>(null);
 let detachConnectionEvents: (() => void) | undefined;
 
+function restoreParticipantName() {
+  try {
+    name.value = window.localStorage.getItem(participantNameStorageKey) ?? name.value;
+  } catch {
+    // Browser storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+function rememberParticipantName() {
+  try {
+    window.localStorage.setItem(participantNameStorageKey, trimmedName.value);
+  } catch {
+    // Remembering the name should never prevent someone from joining.
+  }
+}
+
 function detachMeetingEvents() {
   detachConnectionEvents?.();
   detachConnectionEvents = undefined;
@@ -97,6 +115,8 @@ async function joinMeeting() {
   if (!canJoinMeeting.value || !beginJoin()) {
     return;
   }
+
+  rememberParticipantName();
 
   try {
     const endpoint = `/api/meetings/${encodeURIComponent(roomId.value)}/participants`;
@@ -162,6 +182,8 @@ async function returnHome() {
 onBeforeUnmount(() => {
   detachMeetingEvents();
 });
+
+onMounted(restoreParticipantName);
 </script>
 
 <template>
